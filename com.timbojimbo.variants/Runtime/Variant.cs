@@ -71,6 +71,10 @@ namespace TimboJimbo.Variants
     {
         [SerializeField] private string _name;
         [SerializeField] private string _selected = "";
+
+        [Tooltip("Switching it animates, wherever it is switched from (code, a button, a breakpoint), as SwiftUI's .animation(value:): the layout it changes springs, and its values move on the springs of the layout nodes they are drawn in. A switch made inside LayoutSystem.Animate animates either way.")]
+        [SerializeField] private bool _animated = true;
+
         [SerializeField] private List<Variant> _variants = new();
 
         public VariantGroup() : this("Group") { }
@@ -88,6 +92,12 @@ namespace TimboJimbo.Variants
 
         /// <summary>The selected variant's name; empty for Default.</summary>
         public string Selected { get => _selected ?? ""; internal set => _selected = value ?? ""; }
+
+        /// <summary>
+        /// Whether switching it animates, wherever it is switched from, as SwiftUI's <c>.animation(value:)</c>: the
+        /// switch is made inside <c>LayoutSystem.Animate</c>. One made inside a change joins it, either way.
+        /// </summary>
+        public bool Animated { get => _animated; set => _animated = value; }
 
         public IReadOnlyList<Variant> Variants => _variants;
         internal List<Variant> VariantList => _variants;

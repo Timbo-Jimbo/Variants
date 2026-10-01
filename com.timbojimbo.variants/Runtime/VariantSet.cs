@@ -16,9 +16,12 @@ namespace TimboJimbo.Variants
     /// In the editor the selection is previewed and never saved: scenes and prefabs keep their default values, and the
     /// inspector records a variant by editing the objects while it is selected. In play mode a variant set applies its
     /// selection when it wakes and whenever <see cref="Set(string, string)"/> changes it. It notes each value's default the
-    /// first time it applies, and puts that back when nothing selected sets it. Switched inside
-    /// <see cref="TimboJimbo.UI.Layout.LayoutSystem.Animate(Action, string[])"/>, what the switch changes moves with the
-    /// change (see <see cref="VariantMotion"/>).
+    /// first time it applies, and puts that back when nothing selected sets it. A group that is
+    /// <see cref="VariantGroup.Animated"/> (as groups are, unless turned off) switches inside
+    /// <see cref="TimboJimbo.UI.Layout.LayoutSystem.Animate(Action, string[])"/> wherever it is switched from, as
+    /// SwiftUI's .animation(value:), so what the switch changes moves (see <see cref="VariantMotion"/>); any switch made
+    /// inside a change joins it. <see cref="VariantStates"/> and <see cref="VariantBreakpoints"/> switch a group from
+    /// the pointer and from the size of what they are on.
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("Timbo Jimbo/Variants/Variant Set")]
@@ -84,18 +87,35 @@ namespace TimboJimbo.Variants
         /// <summary>Puts <paramref name="group"/> back on Default.</summary>
         public void Clear(string group) => Set(group, null);
 
-        /// <summary>Puts every group back on Default.</summary>
+        /// <summary>
+        /// Selects <paramref name="variant"/> in whichever group has it, or puts that group back on Default when it is
+        /// selected already: a switch turning on and off, a card opening and closing. Warns when no group has one.
+        /// </summary>
+        public void Toggle(string variant)
+        {
+            for (int g = 0; g < _groups.Count; g++)
+            {
+                if (_groups[g].IndexOf(variant) < 0) continue;
+                Select(g, _groups[g].Selected == variant ? null : variant, Application.isPlaying);
+                return;
+            }
+            Debug.LogWarning($"{name} has no variant named '{variant}'.", this);
+        }
+
+        /// <summary>Puts every group back on Default, animated if any group it changes is.</summary>
         public void ClearAll()
         {
-            bool changed = false;
+            bool changed = false, animated = false;
             foreach (var group in _groups)
             {
-                changed |= group.Selected.Length > 0;
+                if (group.Selected.Length == 0) continue;
+                changed = true;
+                animated |= group.Animated;
                 group.Selected = "";
             }
             if (!changed) return;
             if (Application.isPlaying)
-                Apply();
+                Switch(animated);
             Notify();
         }
 
@@ -143,8 +163,18 @@ namespace TimboJimbo.Variants
 
             target.Selected = variant;
             if (apply)
-                Apply();
+                Switch(target.Animated);
             Notify();
+        }
+
+        // Applies a change of selection: inside LayoutSystem.Animate for an animated group, so what it changes moves; a
+        // switch made inside a change already joins that one, either way.
+        private void Switch(bool animated)
+        {
+            if (animated)
+                LayoutSystem.Animate(Apply);
+            else
+                Apply();
         }
 
         // Tells the editor's preview, which shows every change outside play mode, then anyone listening.

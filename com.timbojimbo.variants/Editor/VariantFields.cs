@@ -108,7 +108,7 @@ namespace TimboJimboEditor.Variants
                 case VariantValueKind.String:
                 {
                     string chosen = accessor is SelectionAccessor selection && target is VariantSet inner
-                        ? SelectionPopup(label, text.stringValue, inner, selection.Group)
+                        ? VariantPopup(label, text.stringValue, inner, selection.Group, "Default")
                         : EditorGUILayout.TextField(label, text.stringValue);
                     if (EditorGUI.EndChangeCheck()) text.stringValue = chosen;
                     return;
@@ -125,14 +125,34 @@ namespace TimboJimboEditor.Variants
             }
         }
 
-        // Which of another set's variants a variant selects there: Default or one of its names.
-        private static string SelectionPopup(GUIContent label, string current, VariantSet inner, string groupName)
+        /// <summary>
+        /// One of a set's variants in <paramref name="groupName"/>, by name: <paramref name="empty"/> (Default, or None
+        /// for a state) for the empty name, then the group's variants. A name it does not have stays, shown as missing;
+        /// with no set, or no such group, the name is typed.
+        /// </summary>
+        public static string VariantPopup(GUIContent label, string current, VariantSet set, string groupName, string empty)
         {
-            int g = inner.IndexOfGroup(groupName);
-            var options = new List<string> { "Default" };
-            if (g >= 0) options.AddRange(inner.Groups[g].Variants.Select(v => v.Name));
+            int g = set != null ? set.IndexOfGroup(groupName) : -1;
+            if (g < 0) return EditorGUILayout.TextField(label, current);
 
-            int index = string.IsNullOrEmpty(current) ? 0 : options.IndexOf(current);
+            var options = new List<string> { empty };
+            options.AddRange(set.Groups[g].Variants.Select(v => v.Name));
+            return Popup(label, current, options, emptyFirst: true);
+        }
+
+        /// <summary>One of a set's groups, by name; a name it does not have stays, shown as missing. With no set, it is typed.</summary>
+        public static string GroupPopup(GUIContent label, string current, VariantSet set)
+        {
+            if (set == null || set.Groups.Count == 0) return EditorGUILayout.TextField(label, current);
+            return Popup(label, current, set.Groups.Select(g => g.Name).ToList(), emptyFirst: false);
+        }
+
+        // A popup of names, `current` picked, kept and marked missing when it is not among them; with `emptyFirst`, the
+        // first option stands for the empty name.
+        private static string Popup(GUIContent label, string current, List<string> options, bool emptyFirst)
+        {
+            int index = emptyFirst && string.IsNullOrEmpty(current) ? 0 : options.IndexOf(current);
+            if (emptyFirst && index == 0 && !string.IsNullOrEmpty(current)) index = -1;
             if (index < 0)
             {
                 options.Add($"{current} (missing)");
@@ -140,7 +160,7 @@ namespace TimboJimboEditor.Variants
             }
             int chosen = EditorGUILayout.Popup(label, index, options.ToArray());
             if (chosen == index) return current;
-            return chosen == 0 ? "" : options[chosen];
+            return emptyFirst && chosen == 0 ? "" : options[chosen];
         }
     }
 }

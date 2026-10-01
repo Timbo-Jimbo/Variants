@@ -32,6 +32,9 @@ namespace TimboJimboEditor.Variants
         private static readonly Dictionary<(Object, string), string> s_sources = new();
         private static readonly Dictionary<(VariantSet, int), Driven> s_drivenSelections = new();
 
+        // Each breakpoints component in the stage, with the variant it gave at the last sample, to see when it gives another.
+        private static readonly List<(VariantBreakpoints Breakpoints, string Variant)> s_breakpoints = new();
+
         private readonly struct Driven
         {
             public readonly string Variant;
@@ -151,8 +154,22 @@ namespace TimboJimboEditor.Variants
             if (Paused && !AnimationMode.InAnimationMode())
                 s_dirty = true;
 
+            // A canvas or the Game view resizing says nothing: a breakpoint that now gives another variant asks for one.
+            if (!s_dirty && !EditorApplication.isPlayingOrWillChangePlaymode && BreakpointsMoved())
+                s_dirty = true;
+
             if (s_dirty)
                 Sample();
+        }
+
+        private static bool BreakpointsMoved()
+        {
+            foreach (var (breakpoints, variant) in s_breakpoints)
+            {
+                if (breakpoints == null || breakpoints.VariantFor(breakpoints.DrawnSize) != variant)
+                    return true;
+            }
+            return false;
         }
 
         private static void PlayModeChanged(PlayModeStateChange change)
@@ -247,16 +264,17 @@ namespace TimboJimboEditor.Variants
                 AnimationMode.AddPropertyModification(VariantCapture.Binding(target, leaf), VariantCapture.Snapshot(target, leaf), true));
         }
 
-        // What every set's selection gives the objects under it. Sets further out come first: a variant there can select
-        // a variant of a set inside (the set is shown as that, whatever its own selection), and where both set a value,
-        // the one further out wins, as an outer prefab's overrides win over a nested one's. Within a set, a later group
-        // wins over an earlier one.
+        // What every set's selection gives the objects under it. Breakpoints come first, each selecting its group's
+        // variant for the size its rect is drawn at now, as it would in play mode. Then sets further out come first: a
+        // variant there can select a variant of a set inside (the set is shown as that, whatever its own selection), and
+        // where both set a value, the one further out wins, as an outer prefab's overrides win over a nested one's.
+        // Within a set, a later group wins over an earlier one.
         private static List<Write> Resolve()
         {
             s_sources.Clear();
             s_drivenSelections.Clear();
 
-            var sets = FindSets();
+            var sets = FindInStage<VariantSet>();
             sets.Sort((a, b) => Depth(a.transform).CompareTo(Depth(b.transform)));
 
             var selections = new Dictionary<VariantSet, string[]>();
@@ -266,6 +284,21 @@ namespace TimboJimboEditor.Variants
                 for (int g = 0; g < selected.Length; g++)
                     selected[g] = set.Groups[g].Selected;
                 selections[set] = selected;
+            }
+
+            s_breakpoints.Clear();
+            foreach (var breakpoints in FindInStage<VariantBreakpoints>())
+            {
+                var size = breakpoints.DrawnSize;
+                string variant = breakpoints.VariantFor(size);
+                s_breakpoints.Add((breakpoints, variant));
+
+                var target = breakpoints.Target;
+                if (target == null || !selections.TryGetValue(target, out var selected)) continue;
+                int group = target.IndexOfGroup(breakpoints.Group);
+                if (group < 0 || (variant.Length > 0 && target.Groups[group].IndexOf(variant) < 0)) continue;
+                selected[group] = variant;
+                s_drivenSelections[(target, group)] = new Driven(variant, Describe(breakpoints, size), null);
             }
 
             var writes = new List<Write>();
@@ -317,10 +350,23 @@ namespace TimboJimboEditor.Variants
             s_drivenSelections[(inner, group)] = new Driven(entry.Value.StringValue, source, by);
         }
 
-        // Every variant set in the stage being edited, active or not.
-        private static List<VariantSet> FindSets()
+        // What selects a breakpoint's variant, for the inspector's "Shown as ..., which ... selects".
+        private static string Describe(VariantBreakpoints breakpoints, Vector2 size)
         {
-            var found = new List<VariantSet>();
+            float value = breakpoints.MeasureOf(size);
+            string at = breakpoints.Measure switch
+            {
+                BreakpointMeasure.Width => $"{value:0} wide",
+                BreakpointMeasure.Height => $"{value:0} tall",
+                _ => $"an aspect of {value:0.##}",
+            };
+            return $"{breakpoints.name}'s breakpoints at {at}";
+        }
+
+        // Every component of a kind in the stage being edited, active or not.
+        private static List<T> FindInStage<T>() where T : Component
+        {
+            var found = new List<T>();
             var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
             if (prefabStage != null)
             {
@@ -328,7 +374,7 @@ namespace TimboJimboEditor.Variants
                 return found;
             }
 
-            var buffer = new List<VariantSet>();
+            var buffer = new List<T>();
             for (int i = 0; i < SceneManager.sceneCount; i++)
             {
                 var scene = SceneManager.GetSceneAt(i);

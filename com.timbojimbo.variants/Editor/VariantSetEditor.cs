@@ -21,6 +21,8 @@ namespace TimboJimboEditor.Variants
         private const string DefaultLabel = "Default";
 
         private static readonly GUIContent s_addVariant = new("+", "Add a variant to this group.");
+        private static readonly GUIContent s_animated = new("Animated",
+            "Switching this group animates, wherever it is switched from: its layout springs, and its values move on the springs of the layout nodes they are drawn in.");
         private static readonly GUIContent s_menu = new("⋮", "More");
         private static readonly GUIContent s_remove = new("×", "Take this value out of the variant: it keeps its default here.");
         private static readonly Color s_recordColor = new(1f, 0.45f, 0.45f);
@@ -73,6 +75,8 @@ namespace TimboJimboEditor.Variants
                 string renamed = EditorGUILayout.DelayedTextField(name.stringValue, s_groupName);
                 if (EditorGUI.EndChangeCheck() && renamed.Trim().Length > 0)
                     name.stringValue = renamed.Trim();
+                var animated = group.FindPropertyRelative("_animated");
+                animated.boolValue = EditorGUILayout.ToggleLeft(s_animated, animated.boolValue, GUILayout.Width(76));
                 if (GUILayout.Button(s_menu, EditorStyles.miniButton, GUILayout.Width(22)))
                     GroupMenu(g, groups.arraySize);
             }
@@ -257,6 +261,7 @@ namespace TimboJimboEditor.Variants
             var group = groups.GetArrayElementAtIndex(groups.arraySize - 1);
             group.FindPropertyRelative("_name").stringValue = Unique("Group", names.ToList());
             group.FindPropertyRelative("_selected").stringValue = "";
+            group.FindPropertyRelative("_animated").boolValue = true;
             group.FindPropertyRelative("_variants").ClearArray();
         }
 

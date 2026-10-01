@@ -20,7 +20,15 @@ The selected variants show in the scene and in prefab mode through AnimationMode
 
 🌀 **Animated**
 
-Switch inside `LayoutSystem.Animate(() => toast.Set("Error"))` and the change animates: the layout it changes springs, and colours and other numbers move on the spring of the layout node they're drawn in. Text, sprites and active states change at once. To hide something animatedly, set its node's Display rather than its active state.
+A group marked **Animated** (as new groups are) animates wherever it's switched from: code, a button, a state, a breakpoint. It's SwiftUI's `.animation(value:)`. The layout a switch changes springs, and colours and other numbers move on the spring of the layout node they're drawn in. Text, sprites and active states change at once. To hide something animatedly, set its node's Display rather than its active state. Any switch made inside `LayoutSystem.Animate` animates too, and joins that change.
+
+🖱️ **Interaction States**
+
+**Variant States** selects a variant as the pointer hovers and presses, as keyboard or gamepad navigation focuses, and while it's disabled. It works on any object with a raycast target, so custom hover effects and custom buttons work as well as UGUI controls. One state shows at a time, Disabled first, then Pressed, Focused and Hover, as UIKit's and Selectable's do. Pressed drops when a touch drags out. A Selectable on the same object that isn't interactable disables it, and its own transition is left alone (set it to None).
+
+📐 **Breakpoints**
+
+**Variant Breakpoints** selects a variant by the size its object is drawn at, like CSS container queries and Tailwind's breakpoints, mobile first: Default below every breakpoint. It measures width, height or aspect ratio; orientation is an aspect breakpoint at 1. The editor previews the variant for the size it's drawn at, without saving it.
 
 🪆 **Nesting**
 
@@ -31,6 +39,7 @@ A variant can select a variant of a set inside it: a toast's Error selects Dange
 ```csharp
 toast.Set("Type", "Error");   // or toast.Set("Error"): the first group with a variant of that name
 toast.Clear("Type");          // back to Default
+card.Toggle("Expanded");      // on, or back to Default when it's on already
 toast.Changed += set => Debug.Log(set.Get("Type"));
 ```
 

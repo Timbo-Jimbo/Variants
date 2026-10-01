@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### Added
+
+- `VariantGroup.Animated`, on for new groups and an Animated toggle on each group in the inspector: switching the group animates wherever it is switched from, as SwiftUI's `.animation(value:)` (the switch is made inside `LayoutSystem.Animate`, and one made inside a change joins it)
+- `VariantSet.Toggle(variant)`: on, or back to Default when it is on already; with `Set` and `Clear`, a button wires to it in the inspector
+- `VariantStates`: selects a variant of a group as the pointer hovers and presses, as navigation focuses, and while disabled, on any object with a raycast target. One state at a time, Disabled, Pressed, Focused then Hover; Pressed drops when a touch drags out, as UIKit's highlight does; Disabled is its own `Interactable` off or a Selectable on it that is not interactable. Inspector with the set's own groups and variants to pick from
+- `VariantBreakpoints`: selects a variant of a group by the size its object is drawn at (width, height or aspect ratio), mobile first, as container queries and Tailwind's breakpoints. The editor previews the variant for the size it is drawn at, without saving it, and the set's inspector says what selected it. Inspector with rows of breakpoints and a readout of what it measures now
+
 ## [0.1.0]
 
 The first version, a working mockup.
