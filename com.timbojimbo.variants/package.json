@@ -1,0 +1,21 @@
+{
+	"name": "com.timbojimbo.variants",
+	"displayName": "Variants",
+	"version": "0.1.0",
+	"unity": "6000.0",
+	"unityRelease": "0f1",
+	"description": "Variants that live inside a prefab and switch in place, as prefab variants would if one instance could be any of them: each a set of values (colours, sprites, text, whether an object is active, any serialized field) on objects in its hierarchy. Recorded by editing the objects, previewed in the editor without being saved, and switched from code.",
+	"dependencies": {
+		"com.unity.ugui": "2.0.0",
+		"com.timbojimbo.core": "0.6.0",
+		"com.timbojimbo.ui.layout": "0.4.0"
+	},
+	"author": {
+		"name": "Timbo Jimbo",
+		"url": "https://timbojimbo.com",
+		"email": "hello@timbojimbo.com"
+	},
+	"changelogUrl": "https://github.com/Timbo-Jimbo/Variants/blob/main/com.timbojimbo.variants/CHANGELOG.md",
+	"documentationUrl": "https://github.com/Timbo-Jimbo/Variants#readme",
+	"licensesUrl": "https://github.com/Timbo-Jimbo/Variants/blob/main/LICENSE"
+}

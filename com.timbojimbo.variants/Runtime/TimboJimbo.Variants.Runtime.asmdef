@@ -1,0 +1,18 @@
+{
+    "name": "TimboJimbo.Variants.Runtime",
+    "rootNamespace": "TimboJimbo.Variants",
+    "references": [
+        "UnityEngine.UI",
+        "TimboJimbo.Core.Runtime",
+        "TimboJimbo.UI.Layout.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
