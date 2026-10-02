@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TimboJimbo.Motion;
 using TimboJimbo.UI.Layout;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -11,16 +12,18 @@ namespace TimboJimbo.Variants
     /// whether an object is active, any serialized field) on objects in its hierarchy, but one instance switches between
     /// them in place rather than being swapped for another prefab. Variants come in groups that are set independently (a
     /// toast's Type: Success, Warning or Error, and its Size: Compact), each on Default (the prefab as it is) or one of its
-    /// variants; where two groups set the same value, the later group wins. A variant can select a variant of another set
-    /// inside this one, as a toast's Error selects Danger on its button.
+    /// variants; where two groups set the same value, the later group wins. A group on Inherit (as new groups are) shows
+    /// what the nearest set above it with a group of the same name shows, as SwiftUI's environment passes down: a badge
+    /// authored on its own shows its toast's Type. A variant can select a variant of another set inside this one, as a
+    /// toast's Error selects Danger on its button.
     /// In the editor the selection is previewed and never saved: scenes and prefabs keep their default values, and the
     /// inspector records a variant by editing the objects while it is selected. In play mode a variant set applies its
     /// selection when it wakes and whenever <see cref="Set(string, string)"/> changes it. It notes each value's default the
     /// first time it applies, and puts that back when nothing selected sets it. A group that is
     /// <see cref="VariantGroup.Animated"/> (as groups are, unless turned off) switches inside
-    /// <see cref="TimboJimbo.UI.Layout.LayoutSystem.Animate(Action, string[])"/> wherever it is switched from, as
-    /// SwiftUI's .animation(value:), so what the switch changes moves (see <see cref="VariantMotion"/>); any switch made
-    /// inside a change joins it. <see cref="VariantStates"/> and <see cref="VariantBreakpoints"/> switch a group from
+    /// <see cref="MotionSystem.Animate(MotionAnimation, Action, string[])"/> on its <see cref="VariantGroup.Animation"/>
+    /// wherever it is switched from, as SwiftUI's .animation(_:value:), so what the switch changes moves (see
+    /// <see cref="VariantMotion"/>); any switch made inside a change joins it. <see cref="VariantStates"/> and <see cref="VariantBreakpoints"/> switch a group from
     /// the pointer and from the size of what they are on.
     /// </summary>
     [DisallowMultipleComponent]
@@ -39,6 +42,10 @@ namespace TimboJimbo.Variants
         [NonSerialized] private int[][][] _entrySlots;
         [NonSerialized] private VariantValue[] _resolved;
 
+        // What each group showed when it last applied (null until it has, when each showed Default as far as its objects
+        // know), to tell when what it inherits has changed.
+        [NonSerialized] private string[] _applied;
+
         private struct Slot
         {
             public Object Target;
@@ -47,6 +54,10 @@ namespace TimboJimbo.Variants
             public VariantValue Default;
             public VariantValue Last;
             public bool Selection;
+
+            // For another set's selection: whether that group inherited when its default was read, so putting the default
+            // back puts it back on Inherit rather than selecting it.
+            public bool Inherited;
 
             // Whether it moves on a spring with a change, and the layout node whose spring it moves on.
             public bool Springs;
@@ -59,14 +70,21 @@ namespace TimboJimbo.Variants
         public IReadOnlyList<VariantGroup> Groups => _groups;
         internal List<VariantGroup> GroupList => _groups;
 
-        /// <summary>The variant selected in <paramref name="group"/>: its name, or empty for Default (and for no such group).</summary>
+        /// <summary>
+        /// The variant <paramref name="group"/> shows: its name, or empty for Default (and for no such group). It is the
+        /// group's own selection, or while it <see cref="VariantGroup.Inherits"/>, what the nearest set above it with a
+        /// group of that name shows.
+        /// </summary>
         public string Get(string group)
         {
             int index = IndexOfGroup(group);
-            return index < 0 ? "" : _groups[index].Selected;
+            return index < 0 ? "" : Shown(index);
         }
 
-        /// <summary>Selects <paramref name="variant"/> in <paramref name="group"/> (null or empty for Default).</summary>
+        /// <summary>
+        /// Selects <paramref name="variant"/> in <paramref name="group"/> (null or empty for Default) as its own: it stops
+        /// inheriting, and what it shows passes down to the sets under it that inherit it.
+        /// </summary>
         public void Set(string group, string variant) => Select(group, variant, Application.isPlaying);
 
         /// <summary>
@@ -84,37 +102,51 @@ namespace TimboJimbo.Variants
             Debug.LogWarning($"{name} has no variant named '{variant}'.", this);
         }
 
-        /// <summary>Puts <paramref name="group"/> back on Default.</summary>
-        public void Clear(string group) => Set(group, null);
+        /// <summary>
+        /// Puts <paramref name="group"/> back on Inherit: it shows what the nearest set above it with a group of that name
+        /// shows, and Default where nothing above has the group.
+        /// </summary>
+        public void Clear(string group) => Select(group, null, Application.isPlaying, inherit: true);
 
         /// <summary>
-        /// Selects <paramref name="variant"/> in whichever group has it, or puts that group back on Default when it is
-        /// selected already: a switch turning on and off, a card opening and closing. Warns when no group has one.
+        /// Selects <paramref name="variant"/> in whichever group has it, or puts that group back on Inherit when it shows
+        /// it already: a switch turning on and off, a card opening and closing. Warns when no group has one.
         /// </summary>
         public void Toggle(string variant)
         {
             for (int g = 0; g < _groups.Count; g++)
             {
                 if (_groups[g].IndexOf(variant) < 0) continue;
-                Select(g, _groups[g].Selected == variant ? null : variant, Application.isPlaying);
+                bool shown = Shown(g) == variant;
+                Select(g, shown ? null : variant, Application.isPlaying, inherit: shown);
                 return;
             }
             Debug.LogWarning($"{name} has no variant named '{variant}'.", this);
         }
 
-        /// <summary>Puts every group back on Default, animated if any group it changes is.</summary>
+        /// <summary>
+        /// Puts every group back on Inherit, animated if any group whose look it changes is, on the animation of the first
+        /// that is.
+        /// </summary>
         public void ClearAll()
         {
-            bool changed = false, animated = false;
-            foreach (var group in _groups)
+            bool changed = false, moved = false;
+            VariantGroup animated = null;
+            for (int g = 0; g < _groups.Count; g++)
             {
-                if (group.Selected.Length == 0) continue;
+                var group = _groups[g];
+                if (group.Inherits) continue;
                 changed = true;
-                animated |= group.Animated;
+                string shown = Shown(g);
+                group.Inherits = true;
                 group.Selected = "";
+                if (Shown(g) == shown) continue;
+                moved = true;
+                if (animated == null && group.Animated)
+                    animated = group;
             }
             if (!changed) return;
-            if (Application.isPlaying)
+            if (moved && Application.isPlaying)
                 Switch(animated);
             Notify();
         }
@@ -139,7 +171,7 @@ namespace TimboJimbo.Variants
             return -1;
         }
 
-        internal void Select(string group, string variant, bool apply)
+        internal void Select(string group, string variant, bool apply, bool inherit = false)
         {
             int index = IndexOfGroup(group);
             if (index < 0)
@@ -147,34 +179,97 @@ namespace TimboJimbo.Variants
                 Debug.LogWarning($"{name} has no variant group named '{group}'.", this);
                 return;
             }
-            Select(index, variant, apply);
+            Select(index, variant, apply, inherit);
         }
 
-        internal void Select(int group, string variant, bool apply)
+        // Gives a group a selection of its own (`variant`, empty for Default), or with `inherit` puts it back on Inherit;
+        // with `apply`, shows it, and what it now shows passes down.
+        internal void Select(int group, string variant, bool apply, bool inherit = false)
         {
-            variant ??= "";
+            variant = inherit ? "" : variant ?? "";
             var target = _groups[group];
             if (variant.Length > 0 && target.IndexOf(variant) < 0)
             {
                 Debug.LogWarning($"{name}'s {target.Name} has no variant named '{variant}'.", this);
                 return;
             }
-            if (target.Selected == variant) return;
+            if (target.Inherits == inherit && target.Selected == variant) return;
 
+            string shown = Shown(group);
+            target.Inherits = inherit;
             target.Selected = variant;
-            if (apply)
-                Switch(target.Animated);
+            if (apply && Shown(group) != shown)
+                Switch(target.Animated ? target : null);
             Notify();
         }
 
-        // Applies a change of selection: inside LayoutSystem.Animate for an animated group, so what it changes moves; a
-        // switch made inside a change already joins that one, either way.
-        private void Switch(bool animated)
+        /// <summary>
+        /// What <paramref name="group"/> shows: its own selection, or while it inherits, what the nearest set above it with
+        /// a group of that name shows (that one's own, or what it inherits in turn); empty for Default, and with nothing
+        /// above. A name it has no variant of shows Default here, and still passes down.
+        /// </summary>
+        internal string Shown(int group)
         {
-            if (animated)
-                LayoutSystem.Animate(Apply);
+            var target = _groups[group];
+            if (!target.Inherits) return target.Selected;
+            var above = Above(target.Name, out int index);
+            return above != null ? above.Shown(index) : "";
+        }
+
+        /// <summary>The nearest set above this one with a group named <paramref name="group"/>, and that group's index.</summary>
+        internal VariantSet Above(string group, out int index)
+        {
+            for (var parent = transform.parent; parent != null; parent = parent.parent)
+            {
+                if (!parent.TryGetComponent(out VariantSet set)) continue;
+                index = set.IndexOfGroup(group);
+                if (index >= 0) return set;
+            }
+            index = -1;
+            return null;
+        }
+
+        // Applies a change of selection, and passes it down to the sets under it that inherit it: for an `animated` group
+        // (null for none), inside MotionSystem.Animate on that group's animation, so what it changes moves, theirs too; a
+        // switch made inside a change already joins that one, either way.
+        private void Switch(VariantGroup animated)
+        {
+            if (animated != null)
+                MotionSystem.Animate(animated.Animation ?? MotionAnimation.Default, ApplyAndPassDown);
             else
+                ApplyAndPassDown();
+        }
+
+        private void ApplyAndPassDown()
+        {
+            Apply();
+            // In hierarchy order, so each set has taken up what it inherits before the sets under it read it from there.
+            foreach (var below in GetComponentsInChildren<VariantSet>(true))
+            {
+                if (below != this)
+                    below.Refresh();
+            }
+        }
+
+        // Shows what it inherits now (in play mode): it applies again when any group shows other than it did when it last
+        // applied, and says so.
+        private void Refresh()
+        {
+            for (int g = 0; g < _groups.Count; g++)
+            {
+                string applied = _applied != null && g < _applied.Length ? _applied[g] : "";
+                if (Shown(g) == applied) continue;
                 Apply();
+                Notify();
+                return;
+            }
+        }
+
+        // Moved under another parent in play mode, it shows what it inherits there (as do the sets under it, told too).
+        private void OnTransformParentChanged()
+        {
+            if (Application.isPlaying)
+                Refresh();
         }
 
         // Tells the editor's preview, which shows every change outside play mode, then anyone listening.
@@ -187,20 +282,21 @@ namespace TimboJimbo.Variants
             Changed?.Invoke(this);
         }
 
+        // Shows what it selects and inherits as it wakes (a badge made under a toast shows the toast's Type).
         private void Awake()
         {
-            foreach (var group in _groups)
+            for (int g = 0; g < _groups.Count; g++)
             {
-                if (group.Selected.Length == 0) continue;
+                if (Shown(g).Length == 0) continue;
                 Apply();
                 return;
             }
         }
 
         /// <summary>
-        /// Writes every value any variant sets as the selection gives it: the selected variant's value from the last group
-        /// whose selection sets it, else its default. Only what differs from what it last wrote is written. Other variant
-        /// sets' selections go first, so what they set settles before this one's own values land over it.
+        /// Writes every value any variant sets as the groups show: the shown variant's value from the last group whose
+        /// variant sets it, else its default. Only what differs from what it last wrote is written. Other variant sets'
+        /// selections go first, so what they set settles before this one's own values land over it.
         /// </summary>
         internal void Apply()
         {
@@ -210,7 +306,8 @@ namespace TimboJimbo.Variants
 
             for (int g = 0; g < _groups.Count; g++)
             {
-                int v = _groups[g].IndexOf(_groups[g].Selected);
+                string shown = _applied[g] = Shown(g);
+                int v = _groups[g].IndexOf(shown);
                 if (v < 0) continue;
                 var entries = _groups[g].VariantList[v].EntryList;
                 var slots = _entrySlots[g][v];
@@ -235,7 +332,9 @@ namespace TimboJimbo.Variants
 
         private static void Put(in Slot slot, VariantValue value)
         {
-            if (slot.Springs)
+            if (slot.Inherited && value.Equals(slot.Default))
+                ((SelectionAccessor)slot.Accessor).Inherit(slot.Target);
+            else if (slot.Springs)
                 VariantMotion.Move(slot.Target, slot.Property, slot.Accessor, slot.Node, value);
             else
                 slot.Accessor.Write(slot.Target, value);
@@ -278,6 +377,7 @@ namespace TimboJimbo.Variants
                                 Default = current,
                                 Last = current,
                                 Selection = accessor is SelectionAccessor,
+                                Inherited = accessor is SelectionAccessor selection && selection.Inherits(entry.Target),
                                 Springs = VariantMotion.Springs(entry.Target, accessor.Kind),
                                 Node = VariantMotion.NodeOf(entry.Target),
                             });
@@ -289,6 +389,7 @@ namespace TimboJimbo.Variants
             }
             _slots = slots.ToArray();
             _resolved = new VariantValue[_slots.Length];
+            _applied = new string[_groups.Count];
         }
 
         // Its variants changed while it is applied (edited in the inspector in play mode): put back every default it has

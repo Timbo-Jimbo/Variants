@@ -104,8 +104,21 @@ namespace TimboJimbo.Variants
         public SelectionAccessor(string group) : base(VariantValueKind.String) => Group = group;
 
         public override Type ValueType => typeof(string);
+
+        // What the group shows (inherited or its own), and a selection of its own.
         public override VariantValue Read(Object target) => VariantValue.FromString(((VariantSet)target).Get(Group));
         public override void Write(Object target, VariantValue value) => ((VariantSet)target).Select(Group, value.StringValue, apply: true);
+
+        // Whether the group inherits, and putting it back on Inherit: a variant that selected it, no longer selected,
+        // gives it back what it had.
+        public bool Inherits(Object target)
+        {
+            var set = (VariantSet)target;
+            int group = set.IndexOfGroup(Group);
+            return group >= 0 && set.Groups[group].Inherits;
+        }
+
+        public void Inherit(Object target) => ((VariantSet)target).Select(Group, null, apply: true, inherit: true);
     }
 
     /// <summary>A serialized field, through the property that matches it where there is one, and any fields inside it.</summary>

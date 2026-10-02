@@ -141,8 +141,9 @@ namespace TimboJimbo.Variants
             Refresh();
         }
 
-        // Shows the state that holds. Outside play mode it selects nothing: what an object looks like in the editor is its
-        // own selection's, not the pointer's.
+        // Shows the state that holds, as the group's own selection (Default included), so the group decides for itself
+        // and passes its state down rather than inheriting one. Outside play mode it selects nothing: what an object
+        // looks like in the editor is its own selection's, not the pointer's.
         private void Refresh()
         {
             if (!Application.isPlaying) return;
@@ -152,7 +153,7 @@ namespace TimboJimbo.Variants
             if (group < 0) return;
 
             string variant = Pick(target.Groups[group]);
-            if (target.Groups[group].Selected != variant)
+            if (target.Groups[group].Inherits || target.Groups[group].Selected != variant)
                 target.Set(_group, variant);
         }
 

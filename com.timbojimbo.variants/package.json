@@ -8,6 +8,7 @@
 	"dependencies": {
 		"com.unity.ugui": "2.0.0",
 		"com.timbojimbo.core": "0.6.0",
+		"com.timbojimbo.motion": "0.1.0",
 		"com.timbojimbo.ui.layout": "0.4.0"
 	},
 	"author": {

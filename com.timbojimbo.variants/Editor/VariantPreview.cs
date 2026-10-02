@@ -205,8 +205,9 @@ namespace TimboJimboEditor.Variants
                 return;
             }
 
-            // A recording ends when its set goes, or its group goes back to Default.
-            if (s_recording == null || s_recordingGroup >= s_recording.Groups.Count || s_recording.Groups[s_recordingGroup].Selected.Length == 0)
+            // A recording ends when its set goes, or its group goes back to Default or to Inherit.
+            if (s_recording == null || s_recordingGroup >= s_recording.Groups.Count || s_recording.Groups[s_recordingGroup].Inherits
+                || s_recording.Groups[s_recordingGroup].Selected.Length == 0)
             {
                 s_recording = null;
                 s_recordingGroup = -1;
@@ -267,8 +268,9 @@ namespace TimboJimboEditor.Variants
         // What every set's selection gives the objects under it. Breakpoints come first, each selecting its group's
         // variant for the size its rect is drawn at now, as it would in play mode. Then sets further out come first: a
         // variant there can select a variant of a set inside (the set is shown as that, whatever its own selection), and
-        // where both set a value, the one further out wins, as an outer prefab's overrides win over a nested one's.
-        // Within a set, a later group wins over an earlier one.
+        // where both set a value, the one further out wins, as an outer prefab's overrides win over a nested one's. A
+        // group that inherits, and that neither selects, shows what the nearest set above with a group of its name was
+        // found to show, worked out already. Within a set, a later group wins over an earlier one.
         private static List<Write> Resolve()
         {
             s_sources.Clear();
@@ -277,12 +279,13 @@ namespace TimboJimboEditor.Variants
             var sets = FindInStage<VariantSet>();
             sets.Sort((a, b) => Depth(a.transform).CompareTo(Depth(b.transform)));
 
+            // Null for a group that inherits, until it is selected or its turn comes.
             var selections = new Dictionary<VariantSet, string[]>();
             foreach (var set in sets)
             {
                 var selected = new string[set.Groups.Count];
                 for (int g = 0; g < selected.Length; g++)
-                    selected[g] = set.Groups[g].Selected;
+                    selected[g] = set.Groups[g].Inherits ? null : set.Groups[g].Selected;
                 selections[set] = selected;
             }
 
@@ -308,6 +311,7 @@ namespace TimboJimboEditor.Variants
             {
                 local.Clear();
                 var selected = selections[set];
+                Inherit(set, selected, selections);
                 for (int g = 0; g < set.Groups.Count; g++)
                 {
                     var group = set.Groups[g];
@@ -337,6 +341,22 @@ namespace TimboJimboEditor.Variants
                 }
             }
             return writes;
+        }
+
+        // Each group of `set` that inherits and that nothing has selected shows what the nearest set above with a group of
+        // its name shows, which sets further out were worked out first to find (Default with none). A name it has no
+        // variant of shows Default, and still passes down.
+        private static void Inherit(VariantSet set, string[] selected, Dictionary<VariantSet, string[]> selections)
+        {
+            for (int g = 0; g < selected.Length; g++)
+            {
+                if (selected[g] != null) continue;
+                var name = set.Groups[g].Name;
+                var above = set.Above(name, out int index);
+                selected[g] = above != null && selections.TryGetValue(above, out var theirs) ? theirs[index] ?? "" : "";
+                if (above != null)
+                    s_drivenSelections[(set, g)] = new Driven(selected[g], $"{above.name}'s {name}", above);
+            }
         }
 
         // A variant of `by` selecting a variant of `inner`, unless a set further out already does.
@@ -441,6 +461,15 @@ namespace TimboJimboEditor.Variants
             if (set == null || target == set || modification.previousValue == null) return false;
             var gameObject = GameObjectOf(target);
             if (gameObject == null || !gameObject.transform.IsChildOf(set.transform)) return false;
+
+            // A tab clicked on a set inside this one takes its group off Inherit too: that is put back, as its selection
+            // is below, so outside the variant it keeps inheriting.
+            if (target is VariantSet inheriting && VariantCapture.TryInherit(inheriting, leafPath, out int inheritGroup))
+            {
+                string previous = modification.previousValue.value;
+                inheriting.GroupList[inheritGroup].Inherits = previous == "1" || string.Equals(previous, "true", StringComparison.OrdinalIgnoreCase);
+                return true;
+            }
 
             var kind = VariantCapture.Classify(target, leafPath, out var property);
             if (kind == CaptureKind.Pass) return false;

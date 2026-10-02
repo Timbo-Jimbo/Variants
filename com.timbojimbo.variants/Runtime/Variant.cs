@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TimboJimbo.Motion;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -63,8 +64,10 @@ namespace TimboJimbo.Variants
     }
 
     /// <summary>
-    /// Variants that exclude one another (a toast's Type: Success, Warning, Error), and which of them is selected: one
-    /// of them by name, or none (empty), which is Default, the prefab as it is.
+    /// Variants that exclude one another (a toast's Type: Success, Warning, Error), and which of them is shown: one it
+    /// selects itself by name, or none (empty), which is Default, the prefab as it is; or, while it
+    /// <see cref="Inherits"/>, the one the nearest set above it with a group of the same name shows, as SwiftUI's
+    /// environment and UIKit's traits pass down the hierarchy.
     /// </summary>
     [Serializable]
     public sealed class VariantGroup
@@ -72,32 +75,59 @@ namespace TimboJimbo.Variants
         [SerializeField] private string _name;
         [SerializeField] private string _selected = "";
 
-        [Tooltip("Switching it animates, wherever it is switched from (code, a button, a breakpoint), as SwiftUI's .animation(value:): the layout it changes springs, and its values move on the springs of the layout nodes they are drawn in. A switch made inside LayoutSystem.Animate animates either way.")]
+        [Tooltip("Shows what the nearest variant set above it with a group of this name shows (Default with none), rather than a selection of its own.")]
+        [SerializeField] private bool _inherit;
+
+        [Tooltip("Switching it animates, wherever it is switched from (code, a button, a breakpoint), as SwiftUI's .animation(value:): the layout it changes springs, and its values move on the springs of the layout nodes they are drawn in. A switch made inside MotionSystem.Animate animates either way.")]
         [SerializeField] private bool _animated = true;
+
+        [Tooltip("The animation an animated switch is made on, as SwiftUI's .animation(_:value:): what it moves goes on this, unless a layout node it moves (or one above it) has an Animation of its own. Inherit: the default.")]
+        [SerializeField] private OptionalMotionAnimation _animation = new(null);
 
         [SerializeField] private List<Variant> _variants = new();
 
-        public VariantGroup() : this("Group") { }
+        // What Unity makes a saved group with: one saved before groups could inherit keeps the selection it had.
+        public VariantGroup() => _name = "Group";
 
-        public VariantGroup(string name) => _name = name;
-
-        /// <summary>A group named <paramref name="name"/> of <paramref name="variants"/>, on Default, for building one in code.</summary>
-        public VariantGroup(string name, params Variant[] variants)
+        /// <summary>A group named <paramref name="name"/>, on Inherit, for building one in code.</summary>
+        public VariantGroup(string name)
         {
             _name = name;
-            _variants.AddRange(variants);
+            _inherit = true;
         }
+
+        /// <summary>A group named <paramref name="name"/> of <paramref name="variants"/>, on Inherit, for building one in code.</summary>
+        public VariantGroup(string name, params Variant[] variants) : this(name) => _variants.AddRange(variants);
 
         public string Name { get => _name; internal set => _name = value; }
 
-        /// <summary>The selected variant's name; empty for Default.</summary>
+        /// <summary>
+        /// The variant it selects itself: its name, or empty for Default. Read only while it does not
+        /// <see cref="Inherits"/>; <see cref="VariantSet.Get"/> says what it shows either way.
+        /// </summary>
         public string Selected { get => _selected ?? ""; internal set => _selected = value ?? ""; }
 
         /// <summary>
+        /// Whether it shows what the nearest set above it with a group of the same name shows, rather than a selection of
+        /// its own: that set's variant of the same name, or Default where it has none or nothing above has the group.
+        /// New groups do. <see cref="VariantSet.Set(string, string)"/> gives it a selection of its own, and
+        /// <see cref="VariantSet.Clear"/> puts it back.
+        /// </summary>
+        public bool Inherits { get => _inherit; internal set => _inherit = value; }
+
+        /// <summary>
         /// Whether switching it animates, wherever it is switched from, as SwiftUI's <c>.animation(value:)</c>: the
-        /// switch is made inside <c>LayoutSystem.Animate</c>. One made inside a change joins it, either way.
+        /// switch is made inside <see cref="MotionSystem.Animate(MotionAnimation, Action, string[])"/>, on
+        /// <see cref="Animation"/>. One made inside a change joins it, either way, on that change's animation.
         /// </summary>
         public bool Animated { get => _animated; set => _animated = value; }
+
+        /// <summary>
+        /// The animation an <see cref="Animated"/> switch is made on, as SwiftUI's <c>.animation(_:value:)</c>: a
+        /// hover's quick spring, say. What the switch moves goes on it, unless a layout node it moves (or one above
+        /// that) has an Animation of its own. Null (the default) switches on <see cref="MotionAnimation.Default"/>.
+        /// </summary>
+        public MotionAnimation? Animation { get => _animation.Value; set => _animation = new OptionalMotionAnimation(value); }
 
         public IReadOnlyList<Variant> Variants => _variants;
         internal List<Variant> VariantList => _variants;

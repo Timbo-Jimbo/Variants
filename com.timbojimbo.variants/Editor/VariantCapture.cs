@@ -31,8 +31,9 @@ namespace TimboJimboEditor.Variants
     /// </summary>
     internal static class VariantCapture
     {
-        // A variant set's selection in one of its groups, as the inspector's tabs edit it.
+        // A variant set's selection in one of its groups, and whether the group inherits, as the inspector's tabs edit them.
         private static readonly Regex s_selectionPath = new(@"^_groups\.Array\.data\[(\d+)\]\._selected$");
+        private static readonly Regex s_inheritPath = new(@"^_groups\.Array\.data\[(\d+)\]\._inherit$");
 
         // Edits that are never a variant's: what an object is called, where it sits, and Unity's own bookkeeping.
         private static readonly HashSet<string> s_passed = new()
@@ -74,6 +75,16 @@ namespace TimboJimboEditor.Variants
             if (group >= set.Groups.Count) return false;
             property = VariantSet.SelectionPrefix + set.Groups[group].Name;
             return true;
+        }
+
+        /// <summary>Whether <paramref name="leafPath"/> is whether one of <paramref name="set"/>'s groups inherits, and which.</summary>
+        public static bool TryInherit(VariantSet set, string leafPath, out int group)
+        {
+            group = -1;
+            var match = s_inheritPath.Match(leafPath);
+            if (!match.Success) return false;
+            group = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+            return group < set.Groups.Count;
         }
 
         /// <summary>

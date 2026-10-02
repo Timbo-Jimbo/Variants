@@ -20,7 +20,7 @@ The selected variants show in the scene and in prefab mode through AnimationMode
 
 🌀 **Animated**
 
-A group marked **Animated** (as new groups are) animates wherever it's switched from: code, a button, a state, a breakpoint. It's SwiftUI's `.animation(value:)`. The layout a switch changes springs, and colours and other numbers move on the spring of the layout node they're drawn in. Text, sprites and active states change at once. To hide something animatedly, set its node's Display rather than its active state. Any switch made inside `LayoutSystem.Animate` animates too, and joins that change.
+A group marked **Animated** (as new groups are) animates wherever it's switched from: code, a button, a state, a breakpoint. It's SwiftUI's `.animation(_:value:)`, on the group's **Animation**: Inherit for the default, or a preset of its own, such as a quick, snappy spring for a hover. The layout a switch changes springs, and colours and other numbers move on the spring of the layout node they're drawn in. A layout node with an Animation of its own keeps it. Text, sprites and active states change at once. To hide something animatedly, set its node's Display rather than its active state. Any switch made inside `MotionSystem.Animate` animates too, and joins that change.
 
 🖱️ **Interaction States**
 
@@ -30,17 +30,21 @@ A group marked **Animated** (as new groups are) animates wherever it's switched 
 
 **Variant Breakpoints** selects a variant by the size its object is drawn at, like CSS container queries and Tailwind's breakpoints, mobile first: Default below every breakpoint. It measures width, height or aspect ratio; orientation is an aspect breakpoint at 1. The editor previews the variant for the size it's drawn at, without saving it.
 
+🌳 **Inherited**
+
+A group on **Inherit** (as new groups are) shows what the nearest set above it with a group of the same name shows, like SwiftUI's environment or UIKit's dark mode passing down the hierarchy. Author a badge as a prefab of its own with a Type group, put it in a toast, and it shows the toast's Type: Error there, Error here. A name it has no variant of shows Default, and still passes down. Selecting Default or a variant overrides Inherit for that set and everything under it. The inspector says where an inherited variant comes from. A switch passes down inside the same change, so everything moves together. A group that Variant States or Variant Breakpoints drive selects for itself, so breakpoints on an app's root drive the parts inside it.
+
 🪆 **Nesting**
 
-A variant can select a variant of a set inside it: a toast's Error selects Danger on its close button. The outer set wins where both set a value, as an outer prefab's overrides do.
+A variant can select a variant of a set inside it, by any name: a toast's Error selects Danger on its close button. The outer set wins where both set a value, as an outer prefab's overrides do.
 
 # Usage
 
 ```csharp
 toast.Set("Type", "Error");   // or toast.Set("Error"): the first group with a variant of that name
-toast.Clear("Type");          // back to Default
-card.Toggle("Expanded");      // on, or back to Default when it's on already
-toast.Changed += set => Debug.Log(set.Get("Type"));
+toast.Clear("Type");          // back to Inherit: Default, unless a set above has a Type
+card.Toggle("Expanded");      // on, or back to Inherit when it's on already
+toast.Changed += set => Debug.Log(set.Get("Type"));  // what it shows, inherited or its own
 ```
 
 # Limits

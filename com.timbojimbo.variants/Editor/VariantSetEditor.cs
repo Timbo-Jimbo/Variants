@@ -19,10 +19,15 @@ namespace TimboJimboEditor.Variants
     public sealed class VariantSetEditor : UnityEditor.Editor
     {
         private const string DefaultLabel = "Default";
+        private const string InheritLabel = "Inherit";
 
+        private static readonly GUIContent s_inherit = new(InheritLabel,
+            "Show what the nearest variant set above with a group of this name shows (Default with none), as its parts follow a toast's Type.");
         private static readonly GUIContent s_addVariant = new("+", "Add a variant to this group.");
         private static readonly GUIContent s_animated = new("Animated",
             "Switching this group animates, wherever it is switched from: its layout springs, and its values move on the springs of the layout nodes they are drawn in.");
+        private static readonly GUIContent s_animation = new("Animation",
+            "What an animated switch is made on, unless a layout node it moves (or one above it) has an Animation of its own. Inherit: the default.");
         private static readonly GUIContent s_menu = new("⋮", "More");
         private static readonly GUIContent s_remove = new("×", "Take this value out of the variant: it keeps its default here.");
         private static readonly Color s_recordColor = new(1f, 0.45f, 0.45f);
@@ -64,6 +69,7 @@ namespace TimboJimboEditor.Variants
             var group = groups.GetArrayElementAtIndex(g);
             var name = group.FindPropertyRelative("_name");
             var selected = group.FindPropertyRelative("_selected");
+            var inherit = group.FindPropertyRelative("_inherit");
             var variants = group.FindPropertyRelative("_variants");
 
             EditorGUILayout.Space(2);
@@ -80,26 +86,30 @@ namespace TimboJimboEditor.Variants
                 if (GUILayout.Button(s_menu, EditorStyles.miniButton, GUILayout.Width(22)))
                     GroupMenu(g, groups.arraySize);
             }
+            // What an animated switch is made on: Inherit for the default, or a preset of its own.
+            if (group.FindPropertyRelative("_animated").boolValue)
+                EditorGUILayout.PropertyField(group.FindPropertyRelative("_animation"), s_animation);
 
-            if (VariantPreview.TryGetDriven(Set, g, out var drivenVariant, out var by))
-                EditorGUILayout.LabelField($"Shown as {Label(drivenVariant)}, which {by} selects.", EditorStyles.miniLabel);
+            Shown(g);
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                Tab(DefaultLabel, "", selected, g, EditorStyles.miniButtonLeft);
+                Tab(InheritLabel, null, selected, inherit, g, EditorStyles.miniButtonLeft);
+                Tab(DefaultLabel, "", selected, inherit, g, EditorStyles.miniButtonMid);
                 for (int v = 0; v < variants.arraySize; v++)
                 {
                     string variantName = variants.GetArrayElementAtIndex(v).FindPropertyRelative("_name").stringValue;
-                    Tab(variantName, variantName, selected, g, EditorStyles.miniButtonMid);
+                    Tab(variantName, variantName, selected, inherit, g, EditorStyles.miniButtonMid);
                 }
                 if (GUILayout.Button(s_addVariant, EditorStyles.miniButtonRight, GUILayout.Width(24)))
                 {
-                    AddVariant(variants, selected);
+                    AddVariant(variants, selected, inherit);
                     return false;
                 }
             }
 
-            int index = IndexOf(variants, selected.stringValue);
+            // Inheriting, it has no variant of its own to show here: the line above says what it shows.
+            int index = inherit.boolValue ? -1 : IndexOf(variants, selected.stringValue);
             if (index < 0)
             {
                 if (variants.arraySize == 0)
@@ -124,17 +134,49 @@ namespace TimboJimboEditor.Variants
             return true;
         }
 
-        private void Tab(string label, string variant, SerializedProperty selected, int g, GUIStyle style)
+        // Where what a group shows comes from, when it is not its own selection: a set further out selecting it, a
+        // breakpoint, or (inheriting) the nearest set above with a group of its name. In play mode the selections are the
+        // sets' own, so only an inherited one is said, from the sets as they are.
+        private void Shown(int g)
         {
-            bool on = selected.stringValue == variant;
-            if (on && variant.Length > 0 && VariantPreview.IsRecording(Set, g))
+            var group = Set.Groups[g];
+            string variant, by;
+            if (Application.isPlaying)
+            {
+                if (!group.Inherits || Set.Above(group.Name, out _) is not { } above) return;
+                variant = Set.Get(group.Name);
+                by = $"{above.name}'s {group.Name}";
+            }
+            else if (!VariantPreview.TryGetDriven(Set, g, out variant, out by))
+            {
+                return;
+            }
+            string line = variant.Length == 0 || group.IndexOf(variant) >= 0
+                ? $"Shown as {Label(variant)}, which {by} selects."
+                : $"Shown as {DefaultLabel}: {by} selects {variant}, which this group has no variant of.";
+            EditorGUILayout.LabelField(line, EditorStyles.miniLabel);
+        }
+
+        // A tab: Inherit (`variant` null), Default (empty) or a variant, lit while the group is on it.
+        private void Tab(string label, string variant, SerializedProperty selected, SerializedProperty inherit, int g, GUIStyle style)
+        {
+            bool on = variant == null ? inherit.boolValue : !inherit.boolValue && selected.stringValue == variant;
+            if (on && !string.IsNullOrEmpty(variant) && VariantPreview.IsRecording(Set, g))
                 label = "● " + label;
-            if (GUILayout.Toggle(on, label, style) && !on)
+            if (GUILayout.Toggle(on, variant == null ? s_inherit : new GUIContent(label), style) && !on)
             {
                 if (Application.isPlaying)
-                    Set.Set(Set.Groups[g].Name, variant);
+                {
+                    if (variant == null)
+                        Set.Clear(Set.Groups[g].Name);
+                    else
+                        Set.Set(Set.Groups[g].Name, variant);
+                }
                 else
-                    selected.stringValue = variant;
+                {
+                    inherit.boolValue = variant == null;
+                    selected.stringValue = variant ?? "";
+                }
             }
         }
 
@@ -261,11 +303,13 @@ namespace TimboJimboEditor.Variants
             var group = groups.GetArrayElementAtIndex(groups.arraySize - 1);
             group.FindPropertyRelative("_name").stringValue = Unique("Group", names.ToList());
             group.FindPropertyRelative("_selected").stringValue = "";
+            group.FindPropertyRelative("_inherit").boolValue = true;
             group.FindPropertyRelative("_animated").boolValue = true;
+            group.FindPropertyRelative("_animation").FindPropertyRelative("_set").boolValue = false;
             group.FindPropertyRelative("_variants").ClearArray();
         }
 
-        private static void AddVariant(SerializedProperty variants, SerializedProperty selected)
+        private static void AddVariant(SerializedProperty variants, SerializedProperty selected, SerializedProperty inherit)
         {
             var names = Names(variants);
             variants.arraySize++;
@@ -274,6 +318,7 @@ namespace TimboJimboEditor.Variants
             variant.FindPropertyRelative("_name").stringValue = name;
             variant.FindPropertyRelative("_entries").ClearArray();
             selected.stringValue = name;
+            inherit.boolValue = false;
         }
 
         private void GroupMenu(int g, int count)
@@ -298,6 +343,7 @@ namespace TimboJimboEditor.Variants
                 var copy = variants.GetArrayElementAtIndex(v + 1).FindPropertyRelative("_name");
                 copy.stringValue = Unique(copy.stringValue + " Copy", names);
                 group.FindPropertyRelative("_selected").stringValue = copy.stringValue;
+                group.FindPropertyRelative("_inherit").boolValue = false;
             });
             AddItem(menu, "Move Left", v > 0, groups => groups.GetArrayElementAtIndex(g).FindPropertyRelative("_variants").MoveArrayElement(v, v - 1));
             AddItem(menu, "Move Right", v < count - 1, groups => groups.GetArrayElementAtIndex(g).FindPropertyRelative("_variants").MoveArrayElement(v, v + 1));

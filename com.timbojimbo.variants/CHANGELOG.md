@@ -2,10 +2,18 @@
 
 ### Added
 
-- `VariantGroup.Animated`, on for new groups and an Animated toggle on each group in the inspector: switching the group animates wherever it is switched from, as SwiftUI's `.animation(value:)` (the switch is made inside `LayoutSystem.Animate`, and one made inside a change joins it)
+- `VariantGroup.Animated`, on for new groups and an Animated toggle on each group in the inspector: switching the group animates wherever it is switched from, as SwiftUI's `.animation(value:)` (the switch is made inside `MotionSystem.Animate`, and one made inside a change joins it)
+- `VariantGroup.Animation`: what an animated switch is made on, as SwiftUI's `.animation(_:value:)` (a hover's quick spring); Inherit (null) for the default. A layout node the switch moves with an Animation of its own keeps it. In the inspector under the group's header while it is Animated
 - `VariantSet.Toggle(variant)`: on, or back to Default when it is on already; with `Set` and `Clear`, a button wires to it in the inspector
 - `VariantStates`: selects a variant of a group as the pointer hovers and presses, as navigation focuses, and while disabled, on any object with a raycast target. One state at a time, Disabled, Pressed, Focused then Hover; Pressed drops when a touch drags out, as UIKit's highlight does; Disabled is its own `Interactable` off or a Selectable on it that is not interactable. Inspector with the set's own groups and variants to pick from
 - `VariantBreakpoints`: selects a variant of a group by the size its object is drawn at (width, height or aspect ratio), mobile first, as container queries and Tailwind's breakpoints. The editor previews the variant for the size it is drawn at, without saving it, and the set's inspector says what selected it. Inspector with rows of breakpoints and a readout of what it measures now
+
+- Inherit: a group on Inherit (`VariantGroup.Inherits`) shows what the nearest set above it with a group of the same name shows, as SwiftUI's environment passes down; a name it has no variant of shows Default and still passes down. An explicit selection (Default or a variant) overrides it for that set and those under it. A switch passes down inside the same change; a set made or moved under another in play mode shows what it inherits there. The editor previews it, and the inspector has an Inherit tab first and says where an inherited variant comes from. A group that `VariantStates` or `VariantBreakpoints` drives selects for itself, and passes its state down
+
+### Changed
+
+- New groups start on Inherit, made in the inspector or in code; groups saved before keep their selection. `Get` returns what a group shows, inherited or its own; `Clear`, `ClearAll` and a `Toggle` turned off put groups back on Inherit, which shows Default with nothing above
+- Motion comes from its own package, `com.timbojimbo.motion` (`MotionSystem.Animate`, `MotionSystem.AnimateValue`), a new dependency. A value moves on the animation of the layout node it is drawn in for the change (`LayoutSystem.AnimationOf`): the node's own, the nearest above it, or the change's
 
 ## [0.1.0]
 

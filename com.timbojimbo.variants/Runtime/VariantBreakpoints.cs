@@ -101,8 +101,9 @@ namespace TimboJimbo.Variants
         /// <summary>The size its rect is drawn at now.</summary>
         public Vector2 DrawnSize => ((RectTransform)transform).rect.size;
 
-        // A group or variant it names that its set does not have is left alone, rather than warned about every frame: the
-        // inspector shows it missing.
+        // Selects the variant for the size it is drawn at as the group's own (Default included), so the group passes it
+        // down to the sets under it that inherit it. A group or variant it names that its set does not have is left
+        // alone, rather than warned about every frame: the inspector shows it missing.
         private void Update()
         {
             var target = Target;
@@ -111,7 +112,7 @@ namespace TimboJimbo.Variants
             if (group < 0) return;
             string variant = VariantFor(DrawnSize);
             if (variant.Length > 0 && target.Groups[group].IndexOf(variant) < 0) return;
-            if (target.Groups[group].Selected != variant)
+            if (target.Groups[group].Inherits || target.Groups[group].Selected != variant)
                 target.Set(_group, variant);
         }
 

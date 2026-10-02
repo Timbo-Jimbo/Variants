@@ -4,6 +4,7 @@
     "references": [
         "UnityEngine.UI",
         "TimboJimbo.Core.Runtime",
+        "TimboJimbo.Motion.Runtime",
         "TimboJimbo.UI.Layout.Runtime"
     ],
     "includePlatforms": [],
