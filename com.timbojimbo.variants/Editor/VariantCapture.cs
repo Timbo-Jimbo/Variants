@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Text.RegularExpressions;
 using TimboJimbo.Variants;
 using UnityEditor;
 using UnityEngine;
@@ -31,10 +30,6 @@ namespace TimboJimboEditor.Variants
     /// </summary>
     internal static class VariantCapture
     {
-        // A variant set's selection in one of its groups, and whether the group inherits, as the inspector's tabs edit them.
-        private static readonly Regex s_selectionPath = new(@"^_groups\.Array\.data\[(\d+)\]\._selected$");
-        private static readonly Regex s_inheritPath = new(@"^_groups\.Array\.data\[(\d+)\]\._inherit$");
-
         // Edits that are never a variant's: what an object is called, where it sits, and Unity's own bookkeeping.
         private static readonly HashSet<string> s_passed = new()
         {
@@ -52,8 +47,8 @@ namespace TimboJimboEditor.Variants
         public static CaptureKind Classify(Object target, string leafPath, out string property)
         {
             property = null;
-            if (target is VariantSet set)
-                return TrySelection(set, leafPath, out property) ? CaptureKind.Record : CaptureKind.Pass;
+            // A set's own selection is its own, not a variant's.
+            if (target is VariantSet) return CaptureKind.Pass;
 
             int dot = leafPath.IndexOf('.');
             string root = dot < 0 ? leafPath : leafPath.Substring(0, dot);
@@ -63,28 +58,6 @@ namespace TimboJimboEditor.Variants
             using var serialized = new SerializedObject(target);
             property = EntryPath(serialized, leafPath);
             return property != null && VariantAccessor.For(target, property) != null ? CaptureKind.Record : CaptureKind.Pass;
-        }
-
-        /// <summary>Whether <paramref name="leafPath"/> is <paramref name="set"/>'s selection in a group, and that group's selection property.</summary>
-        public static bool TrySelection(VariantSet set, string leafPath, out string property)
-        {
-            property = null;
-            var match = s_selectionPath.Match(leafPath);
-            if (!match.Success) return false;
-            int group = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
-            if (group >= set.Groups.Count) return false;
-            property = VariantSet.SelectionPrefix + set.Groups[group].Name;
-            return true;
-        }
-
-        /// <summary>Whether <paramref name="leafPath"/> is whether one of <paramref name="set"/>'s groups inherits, and which.</summary>
-        public static bool TryInherit(VariantSet set, string leafPath, out int group)
-        {
-            group = -1;
-            var match = s_inheritPath.Match(leafPath);
-            if (!match.Success) return false;
-            group = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
-            return group < set.Groups.Count;
         }
 
         /// <summary>
@@ -174,8 +147,6 @@ namespace TimboJimboEditor.Variants
         {
             if (target is GameObject)
                 return property == "m_IsActive" ? "Active" : property;
-            if (property.StartsWith(VariantSet.SelectionPrefix, StringComparison.Ordinal))
-                return $"Variant Set · {property.Substring(VariantSet.SelectionPrefix.Length)}";
 
             using var serialized = new SerializedObject(target);
             var found = serialized.FindProperty(property);

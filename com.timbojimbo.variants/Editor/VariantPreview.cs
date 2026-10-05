@@ -27,27 +27,13 @@ namespace TimboJimboEditor.Variants
         private static VariantSet s_recording;
         private static int s_recordingGroup = -1;
 
-        // From the last sample: the variant each value shown comes from, and each selection a variant makes in a set
-        // inside its own, with the variant making it.
+        // From the last sample: the variant each value shown comes from, and each group shown as something other than its
+        // own selection (a breakpoint's, or one it inherits), with what selects it.
         private static readonly Dictionary<(Object, string), string> s_sources = new();
-        private static readonly Dictionary<(VariantSet, int), Driven> s_drivenSelections = new();
+        private static readonly Dictionary<(VariantSet, int), (string Variant, string By)> s_drivenSelections = new();
 
         // Each breakpoints component in the stage, with the variant it gave at the last sample, to see when it gives another.
         private static readonly List<(VariantBreakpoints Breakpoints, string Variant)> s_breakpoints = new();
-
-        private readonly struct Driven
-        {
-            public readonly string Variant;
-            public readonly string By;
-            public readonly VariantSet Set;
-
-            public Driven(string variant, string by, VariantSet set)
-            {
-                Variant = variant;
-                By = by;
-                Set = set;
-            }
-        }
 
         private readonly struct Write
         {
@@ -133,19 +119,14 @@ namespace TimboJimboEditor.Variants
         }
 
         /// <summary>
-        /// Whether a variant of a set further out selects <paramref name="group"/>'s variant here, which it is then shown
-        /// as whatever its own selection: which variant, and the variant selecting it.
+        /// Whether <paramref name="group"/> is shown as something other than its own selection, a breakpoint's or one it
+        /// inherits: which variant, and what selects it.
         /// </summary>
         public static bool TryGetDriven(VariantSet set, int group, out string variant, out string by)
         {
-            if (s_drivenSelections.TryGetValue((set, group), out var driven) && driven.Set != set)
-            {
-                variant = driven.Variant;
-                by = driven.By;
-                return true;
-            }
-            variant = by = null;
-            return false;
+            bool found = s_drivenSelections.TryGetValue((set, group), out var driven);
+            (variant, by) = found ? driven : (null, null);
+            return found;
         }
 
         private static void Update()
@@ -266,11 +247,10 @@ namespace TimboJimboEditor.Variants
         }
 
         // What every set's selection gives the objects under it. Breakpoints come first, each selecting its group's
-        // variant for the size its rect is drawn at now, as it would in play mode. Then sets further out come first: a
-        // variant there can select a variant of a set inside (the set is shown as that, whatever its own selection), and
-        // where both set a value, the one further out wins, as an outer prefab's overrides win over a nested one's. A
-        // group that inherits, and that neither selects, shows what the nearest set above with a group of its name was
-        // found to show, worked out already. Within a set, a later group wins over an earlier one.
+        // variant for the size its rect is drawn at now, as it would in play mode. Then sets further out come first, so a
+        // group that inherits (and that no breakpoint selects) shows what the nearest set above with a group of its name
+        // was found to show, worked out already; and where both set a value, the one further out wins, as an outer
+        // prefab's overrides win over a nested one's. Within a set, a later group wins over an earlier one.
         private static List<Write> Resolve()
         {
             s_sources.Clear();
@@ -301,7 +281,7 @@ namespace TimboJimboEditor.Variants
                 int group = target.IndexOfGroup(breakpoints.Group);
                 if (group < 0 || (variant.Length > 0 && target.Groups[group].IndexOf(variant) < 0)) continue;
                 selected[group] = variant;
-                s_drivenSelections[(target, group)] = new Driven(variant, Describe(breakpoints, size), null);
+                s_drivenSelections[(target, group)] = (variant, Describe(breakpoints, size));
             }
 
             var writes = new List<Write>();
@@ -321,13 +301,8 @@ namespace TimboJimboEditor.Variants
                     string source = $"{set.name} · {group.Name}: {variant.Name}";
                     foreach (var entry in variant.Entries)
                     {
-                        if (entry.Target == null || !Within(entry.Target, set)) continue;
-                        if (entry.Target is VariantSet inner && inner != set && entry.Property.StartsWith(VariantSet.SelectionPrefix, StringComparison.Ordinal))
-                        {
-                            Select(inner, entry, set, source, selections);
-                            continue;
-                        }
-                        local[(entry.Target, entry.Property)] = (entry.Value, source);
+                        if (entry.Target != null && Within(entry.Target, set))
+                            local[(entry.Target, entry.Property)] = (entry.Value, source);
                     }
                 }
 
@@ -343,9 +318,9 @@ namespace TimboJimboEditor.Variants
             return writes;
         }
 
-        // Each group of `set` that inherits and that nothing has selected shows what the nearest set above with a group of
-        // its name shows, which sets further out were worked out first to find (Default with none). A name it has no
-        // variant of shows Default, and still passes down.
+        // Each group of `set` that inherits and that no breakpoint has selected shows what the nearest set above with a
+        // group of its name shows, which sets further out were worked out first to find (Default with none). A name it has
+        // no variant of shows Default, and still passes down.
         private static void Inherit(VariantSet set, string[] selected, Dictionary<VariantSet, string[]> selections)
         {
             for (int g = 0; g < selected.Length; g++)
@@ -355,19 +330,8 @@ namespace TimboJimboEditor.Variants
                 var above = set.Above(name, out int index);
                 selected[g] = above != null && selections.TryGetValue(above, out var theirs) ? theirs[index] ?? "" : "";
                 if (above != null)
-                    s_drivenSelections[(set, g)] = new Driven(selected[g], $"{above.name}'s {name}", above);
+                    s_drivenSelections[(set, g)] = (selected[g], $"{above.name}'s {name}");
             }
-        }
-
-        // A variant of `by` selecting a variant of `inner`, unless a set further out already does.
-        private static void Select(VariantSet inner, VariantEntry entry, VariantSet by, string source, Dictionary<VariantSet, string[]> selections)
-        {
-            int group = inner.IndexOfGroup(entry.Property.Substring(VariantSet.SelectionPrefix.Length));
-            if (group < 0 || !selections.TryGetValue(inner, out var selected)) return;
-            if (s_drivenSelections.TryGetValue((inner, group), out var driven) && driven.Set != by) return;
-
-            selected[group] = entry.Value.StringValue;
-            s_drivenSelections[(inner, group)] = new Driven(entry.Value.StringValue, source, by);
         }
 
         // What selects a breakpoint's variant, for the inspector's "Shown as ..., which ... selects".
@@ -462,30 +426,11 @@ namespace TimboJimboEditor.Variants
             var gameObject = GameObjectOf(target);
             if (gameObject == null || !gameObject.transform.IsChildOf(set.transform)) return false;
 
-            // A tab clicked on a set inside this one takes its group off Inherit too: that is put back, as its selection
-            // is below, so outside the variant it keeps inheriting.
-            if (target is VariantSet inheriting && VariantCapture.TryInherit(inheriting, leafPath, out int inheritGroup))
-            {
-                string previous = modification.previousValue.value;
-                inheriting.GroupList[inheritGroup].Inherits = previous == "1" || string.Equals(previous, "true", StringComparison.OrdinalIgnoreCase);
-                return true;
-            }
-
             var kind = VariantCapture.Classify(target, leafPath, out var property);
             if (kind == CaptureKind.Pass) return false;
 
             string variant = set.Groups[s_recordingGroup].Selected;
             string undoName = $"Record {variant}";
-
-            if (target is VariantSet inner)
-            {
-                // A tab clicked on a set inside this one: the variant selects it there, and the set keeps its own selection.
-                int group = inner.IndexOfGroup(property.Substring(VariantSet.SelectionPrefix.Length));
-                if (group < 0) return false;
-                inner.GroupList[group].Selected = modification.previousValue.value;
-                VariantEditing.SetEntry(set, s_recordingGroup, variant, inner, property, VariantValue.FromString(modification.currentValue?.value), undoName);
-                return true;
-            }
 
             using (var serialized = new SerializedObject(target))
             {

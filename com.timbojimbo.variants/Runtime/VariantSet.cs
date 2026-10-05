@@ -14,8 +14,7 @@ namespace TimboJimbo.Variants
     /// toast's Type: Success, Warning or Error, and its Size: Compact), each on Default (the prefab as it is) or one of its
     /// variants; where two groups set the same value, the later group wins. A group on Inherit (as new groups are) shows
     /// what the nearest set above it with a group of the same name shows, as SwiftUI's environment passes down: a badge
-    /// authored on its own shows its toast's Type. A variant can select a variant of another set inside this one, as a
-    /// toast's Error selects Danger on its button.
+    /// authored on its own shows its toast's Type.
     /// In the editor the selection is previewed and never saved: scenes and prefabs keep their default values, and the
     /// inspector records a variant by editing the objects while it is selected. In play mode a variant set applies its
     /// selection when it wakes and whenever <see cref="Set(string, string)"/> changes it. It notes each value's default the
@@ -30,9 +29,6 @@ namespace TimboJimbo.Variants
     [AddComponentMenu("Timbo Jimbo/Variants/Variant Set")]
     public sealed class VariantSet : MonoBehaviour
     {
-        // How an entry names another variant set's selection in one of its groups, as its property: "group:Type".
-        internal const string SelectionPrefix = "group:";
-
         [SerializeField] private List<VariantGroup> _groups = new();
 
         // What it has set at runtime, built the first time it applies: a slot for each object and property any variant
@@ -53,11 +49,6 @@ namespace TimboJimbo.Variants
             public VariantAccessor Accessor;
             public VariantValue Default;
             public VariantValue Last;
-            public bool Selection;
-
-            // For another set's selection: whether that group inherited when its default was read, so putting the default
-            // back puts it back on Inherit rather than selecting it.
-            public bool Inherited;
 
             // Whether it moves on a spring with a change, and the layout node whose spring it moves on.
             public bool Springs;
@@ -151,12 +142,6 @@ namespace TimboJimbo.Variants
             Notify();
         }
 
-        /// <summary>
-        /// The property an entry names to select a variant of another set's <paramref name="group"/>, its value the
-        /// variant's name (empty for Default): how a toast's Error selects Danger on the button inside it.
-        /// </summary>
-        public static string GroupProperty(string group) => SelectionPrefix + group;
-
         /// <summary>Adds <paramref name="group"/> after its groups, for building a set in code (an editor script making a prefab).</summary>
         public void AddGroup(VariantGroup group)
         {
@@ -240,15 +225,17 @@ namespace TimboJimbo.Variants
                 ApplyAndPassDown();
         }
 
+        // The sets under it take up what they inherit first (each reads it from the selections above it, not from what
+        // was applied), so where one of them sets a value this one sets too, this one's lands last and wins, as an outer
+        // prefab's overrides do and as the editor shows it.
         private void ApplyAndPassDown()
         {
-            Apply();
-            // In hierarchy order, so each set has taken up what it inherits before the sets under it read it from there.
             foreach (var below in GetComponentsInChildren<VariantSet>(true))
             {
                 if (below != this)
                     below.Refresh();
             }
+            Apply();
         }
 
         // Shows what it inherits now (in play mode): it applies again when any group shows other than it did when it last
@@ -295,8 +282,7 @@ namespace TimboJimbo.Variants
 
         /// <summary>
         /// Writes every value any variant sets as the groups show: the shown variant's value from the last group whose
-        /// variant sets it, else its default. Only what differs from what it last wrote is written. Other variant sets'
-        /// selections go first, so what they set settles before this one's own values land over it.
+        /// variant sets it, else its default. Only what differs from what it last wrote is written.
         /// </summary>
         internal void Apply()
         {
@@ -315,16 +301,10 @@ namespace TimboJimbo.Variants
                     if (slots[e] >= 0) _resolved[slots[e]] = entries[e].Value;
             }
 
-            Write(selections: true);
-            Write(selections: false);
-        }
-
-        private void Write(bool selections)
-        {
             for (int s = 0; s < _slots.Length; s++)
             {
                 ref var slot = ref _slots[s];
-                if (slot.Selection != selections || slot.Target == null || slot.Last.Equals(_resolved[s])) continue;
+                if (slot.Target == null || slot.Last.Equals(_resolved[s])) continue;
                 Put(slot, _resolved[s]);
                 slot.Last = _resolved[s];
             }
@@ -332,9 +312,7 @@ namespace TimboJimbo.Variants
 
         private static void Put(in Slot slot, VariantValue value)
         {
-            if (slot.Inherited && value.Equals(slot.Default))
-                ((SelectionAccessor)slot.Accessor).Inherit(slot.Target);
-            else if (slot.Springs)
+            if (slot.Springs)
                 VariantMotion.Move(slot.Target, slot.Property, slot.Accessor, slot.Node, value);
             else
                 slot.Accessor.Write(slot.Target, value);
@@ -376,8 +354,6 @@ namespace TimboJimbo.Variants
                                 Accessor = accessor,
                                 Default = current,
                                 Last = current,
-                                Selection = accessor is SelectionAccessor,
-                                Inherited = accessor is SelectionAccessor selection && selection.Inherits(entry.Target),
                                 Springs = VariantMotion.Springs(entry.Target, accessor.Kind),
                                 Node = VariantMotion.NodeOf(entry.Target),
                             });

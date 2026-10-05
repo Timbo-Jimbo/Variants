@@ -53,12 +53,8 @@ namespace TimboJimbo.Variants
             if (type == typeof(GameObject))
                 return property == "m_IsActive" ? ActiveAccessor.Instance : null;
 
-            if (typeof(VariantSet).IsAssignableFrom(type))
-            {
-                return property.StartsWith(VariantSet.SelectionPrefix, StringComparison.Ordinal)
-                    ? new SelectionAccessor(property.Substring(VariantSet.SelectionPrefix.Length))
-                    : null;
-            }
+            // A set inside another shows what it selects or inherits: a variant does not set it.
+            if (typeof(VariantSet).IsAssignableFrom(type)) return null;
 
             if (property.Contains(".Array.")) return null;
 
@@ -90,35 +86,6 @@ namespace TimboJimbo.Variants
         public override Type ValueType => typeof(bool);
         public override VariantValue Read(Object target) => VariantValue.FromBool(((GameObject)target).activeSelf);
         public override void Write(Object target, VariantValue value) => ((GameObject)target).SetActive(value.BoolValue);
-    }
-
-    /// <summary>
-    /// The variant another variant set has selected in one of its groups, by name: how a variant of a toast selects
-    /// Danger on the button inside it. Writing it applies the inner set at once, so it settles before the outer set's own
-    /// values land over it.
-    /// </summary>
-    internal sealed class SelectionAccessor : VariantAccessor
-    {
-        public readonly string Group;
-
-        public SelectionAccessor(string group) : base(VariantValueKind.String) => Group = group;
-
-        public override Type ValueType => typeof(string);
-
-        // What the group shows (inherited or its own), and a selection of its own.
-        public override VariantValue Read(Object target) => VariantValue.FromString(((VariantSet)target).Get(Group));
-        public override void Write(Object target, VariantValue value) => ((VariantSet)target).Select(Group, value.StringValue, apply: true);
-
-        // Whether the group inherits, and putting it back on Inherit: a variant that selected it, no longer selected,
-        // gives it back what it had.
-        public bool Inherits(Object target)
-        {
-            var set = (VariantSet)target;
-            int group = set.IndexOfGroup(Group);
-            return group >= 0 && set.Groups[group].Inherits;
-        }
-
-        public void Inherit(Object target) => ((VariantSet)target).Select(Group, null, apply: true, inherit: true);
     }
 
     /// <summary>A serialized field, through the property that matches it where there is one, and any fields inside it.</summary>

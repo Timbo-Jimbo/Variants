@@ -134,9 +134,9 @@ namespace TimboJimboEditor.Variants
             return true;
         }
 
-        // Where what a group shows comes from, when it is not its own selection: a set further out selecting it, a
-        // breakpoint, or (inheriting) the nearest set above with a group of its name. In play mode the selections are the
-        // sets' own, so only an inherited one is said, from the sets as they are.
+        // Where what a group shows comes from, when it is not its own selection: a breakpoint, or (inheriting) the
+        // nearest set above with a group of its name. In play mode breakpoints select for real, so only an inherited one
+        // is said, from the sets as they are.
         private void Shown(int g)
         {
             var group = Set.Groups[g];
@@ -280,7 +280,7 @@ namespace TimboJimboEditor.Variants
                 EditorGUILayout.LabelField(label, new GUIContent("Its type has changed: record it again"));
                 return;
             }
-            VariantFields.Draw(label, value, accessor, entryTarget);
+            VariantFields.Draw(label, value, accessor);
         }
 
         private void Rename(SerializedProperty variants, SerializedProperty selected, SerializedProperty name, string renamed)

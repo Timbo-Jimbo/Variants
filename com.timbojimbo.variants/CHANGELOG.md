@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.2.0] - 02/10/2026
 
 ### Added
 
@@ -9,6 +9,10 @@
 - `VariantBreakpoints`: selects a variant of a group by the size its object is drawn at (width, height or aspect ratio), mobile first, as container queries and Tailwind's breakpoints. The editor previews the variant for the size it is drawn at, without saving it, and the set's inspector says what selected it. Inspector with rows of breakpoints and a readout of what it measures now
 
 - Inherit: a group on Inherit (`VariantGroup.Inherits`) shows what the nearest set above it with a group of the same name shows, as SwiftUI's environment passes down; a name it has no variant of shows Default and still passes down. An explicit selection (Default or a variant) overrides it for that set and those under it. A switch passes down inside the same change; a set made or moved under another in play mode shows what it inherits there. The editor previews it, and the inspector has an Inherit tab first and says where an inherited variant comes from. A group that `VariantStates` or `VariantBreakpoints` drives selects for itself, and passes its state down
+
+### Removed
+
+- A variant selecting a variant of a set inside it (the `group:` entries, `VariantSet.GroupProperty`): Inherit passes a selection down by its group's name instead. A saved entry of that kind is skipped
 
 ### Changed
 

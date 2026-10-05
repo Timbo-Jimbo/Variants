@@ -4,14 +4,13 @@ using System.Linq;
 using TimboJimbo.Variants;
 using UnityEditor;
 using UnityEngine;
-using Object = UnityEngine.Object;
 
 namespace TimboJimboEditor.Variants
 {
     /// <summary>Draws a variant's value with the field its property's type calls for: a colour picker, an enum popup, an object field.</summary>
     internal static class VariantFields
     {
-        public static void Draw(GUIContent label, SerializedProperty value, VariantAccessor accessor, Object target)
+        public static void Draw(GUIContent label, SerializedProperty value, VariantAccessor accessor)
         {
             var vector = value.FindPropertyRelative("_vector");
             var integer = value.FindPropertyRelative("_integer");
@@ -107,9 +106,7 @@ namespace TimboJimboEditor.Variants
                 }
                 case VariantValueKind.String:
                 {
-                    string chosen = accessor is SelectionAccessor selection && target is VariantSet inner
-                        ? VariantPopup(label, text.stringValue, inner, selection.Group, "Default")
-                        : EditorGUILayout.TextField(label, text.stringValue);
+                    string chosen = EditorGUILayout.TextField(label, text.stringValue);
                     if (EditorGUI.EndChangeCheck()) text.stringValue = chosen;
                     return;
                 }

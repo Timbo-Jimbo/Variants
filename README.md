@@ -32,11 +32,7 @@ A group marked **Animated** (as new groups are) animates wherever it's switched 
 
 🌳 **Inherited**
 
-A group on **Inherit** (as new groups are) shows what the nearest set above it with a group of the same name shows, like SwiftUI's environment or UIKit's dark mode passing down the hierarchy. Author a badge as a prefab of its own with a Type group, put it in a toast, and it shows the toast's Type: Error there, Error here. A name it has no variant of shows Default, and still passes down. Selecting Default or a variant overrides Inherit for that set and everything under it. The inspector says where an inherited variant comes from. A switch passes down inside the same change, so everything moves together. A group that Variant States or Variant Breakpoints drive selects for itself, so breakpoints on an app's root drive the parts inside it.
-
-🪆 **Nesting**
-
-A variant can select a variant of a set inside it, by any name: a toast's Error selects Danger on its close button. The outer set wins where both set a value, as an outer prefab's overrides do.
+A group on **Inherit** (as new groups are) shows what the nearest set above it with a group of the same name shows, like SwiftUI's environment or UIKit's dark mode passing down the hierarchy. Author a badge as a prefab of its own with a Type group, put it in a toast, and it shows the toast's Type: Error there, Error here. A name it has no variant of shows Default, and still passes down. Selecting Default or a variant overrides Inherit for that set and everything under it. The inspector says where an inherited variant comes from. A switch passes down inside the same change, so everything moves together. A group that Variant States or Variant Breakpoints drive selects for itself, so breakpoints on an app's root drive the parts inside it. Where a set and one inside it both set a value, the outer one wins, as an outer prefab's overrides do.
 
 # Usage
 

@@ -114,30 +114,6 @@ namespace TimboJimboTests.Variants
         }
 
         [Test]
-        public void AVariantSelectsAVariantOfASetInsideIt()
-        {
-            var (set, _, _) = Toast();
-            var button = Make("Button", set.transform, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            var buttonImage = button.GetComponent<Image>();
-            buttonImage.color = Color.white;
-            var inner = button.AddComponent<VariantSet>();
-            var tone = new VariantGroup("Tone");
-            var danger = new Variant("Danger");
-            danger.EntryList.Add(new VariantEntry(buttonImage, "m_Color", VariantValue.FromColor(Color.magenta)));
-            tone.VariantList.Add(danger);
-            inner.GroupList.Add(tone);
-
-            set.GroupList[0].VariantList[1].EntryList.Add(new VariantEntry(inner, VariantSet.SelectionPrefix + "Tone", VariantValue.FromString("Danger")));
-            set.Select("Type", "Error", apply: true);
-            Assert.AreEqual("Danger", inner.Get("Tone"));
-            Assert.AreEqual(Color.magenta, buttonImage.color);
-
-            set.Select("Type", "", apply: true);
-            Assert.AreEqual("", inner.Get("Tone"));
-            Assert.AreEqual(Color.white, buttonImage.color);
-        }
-
-        [Test]
         public void AccessorsGoThroughTheMatchingProperty()
         {
             var gameObject = Make("Thing", null, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(CanvasGroup));
