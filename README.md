@@ -1,5 +1,7 @@
 # Timbo Jimbo - Variants
 
+> **Moved.** Variants is now part of [Timbo Jimbo - UI](https://github.com/Timbo-Jimbo/UI) (`com.timbojimbo.ui` 0.3.0 and later), under the `TimboJimbo.UI.Variants` namespace. This repository is archived at Variants 0.2.0, the version the UI package took it from.
+
 Variants that live inside a prefab and switch in place: prefab variants, if one instance could be any of them.
 
 🎛️ **Variant Set**
